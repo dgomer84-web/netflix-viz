@@ -1,66 +1,27 @@
+//Frontend app - no server code here
 "use client";
 
+//useState - React tool to remeber something and re-render when it changes
+//useMemo - React tool to remember a computed value until dependencies change
 import { useMemo, useState } from "react";
+//Papa - CSV parsing library
 import Papa from "papaparse";
+//Recharts - charting library for the visualizations
 import {
   ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
-  BarChart, Bar,
+  BarChart, Bar, PieChart
 } from "recharts";
+import { skip } from "node:test";
 
+// Create a type for each show/film viewed
 type RawRow = {
-  // Netflix headers vary a bit; these are the ones we use.
-  // We only require Start Time and Title; Duration is optional.
-  "Start Time"?: string;
-  "Start Time UTC"?: string;  // some exports include this
-  Duration?: string;
   Title?: string;
-  [key: string]: any;
+  Date?: string;
 };
 
-type DayPoint = { day: string; minutes: number };
-type TitlePoint = { title: string; minutes: number };
-
-function parseDurationToMinutes(raw?: string): number {
-  if (!raw) return 0;
-  const s = raw.trim();
-
-  // HH:MM:SS
-  let m = s.match(/^(\d+):(\d{1,2}):(\d{1,2})$/);
-  if (m) {
-    const [_, h, mm, ss] = m;
-    return parseInt(h) * 60 + parseInt(mm) + Math.floor(parseInt(ss) / 60);
-  }
-
-  // MM:SS
-  m = s.match(/^(\d{1,2}):(\d{1,2})$/);
-  if (m) {
-    const [_, mm, ss] = m;
-    return parseInt(mm) + Math.floor(parseInt(ss) / 60);
-  }
-
-  // "Xh Ym" or "X h Y m"
-  m = s.match(/^(\d+)\s*h\s*(\d+)\s*m$/i);
-  if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
-
-  // "Xm" or "X min"
-  m = s.match(/^(\d+)\s*m(in)?$/i);
-  if (m) return parseInt(m[1]);
-
-  // plain number? assume minutes
-  m = s.match(/^(\d+)$/);
-  if (m) return parseInt(m[1]);
-
-  return 0; // unknown format
-}
-
-function toDateKey(raw?: string): string | null {
-  if (!raw) return null;
-  // Many Netflix CSVs are ISO-ish; try native Date first.
-  const d = new Date(raw);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  return null;
-}
+type DayPoint = { day: string; watched: number };
+type TitlePoint = { title: string; watched: number };
 
 export default function Home() {
   const [rows, setRows] = useState<RawRow[] | null>(null);
@@ -71,25 +32,20 @@ export default function Home() {
     const titleMap = new Map<string, number>();
 
     rows?.forEach((r) => {
-      const start = toDateKey(r["Start Time"] ?? r["Start Time UTC"]);
       const title = (r["Title"] ?? "").toString();
-      const minutes = parseDurationToMinutes(r["Duration"]);
+      const date = (r["Date"] ?? "1/1/75").toString();
 
-      if (start) {
-        dayMap.set(start, (dayMap.get(start) ?? 0) + minutes);
-      }
-      if (title) {
-        titleMap.set(title, (titleMap.get(title) ?? 0) + minutes);
-      }
+      dayMap.set(date, (dayMap.get(date) ?? 0) + 1);
+      titleMap.set(title, (titleMap.get(title) ?? 0) + 1);
     });
 
     const byDay: DayPoint[] = Array.from(dayMap.entries())
-      .map(([day, minutes]) => ({ day, minutes }))
+      .map(([day, watched]) => ({ day, watched }))
       .sort((a, b) => (a.day < b.day ? -1 : 1));
 
     const byTitle: TitlePoint[] = Array.from(titleMap.entries())
-      .map(([title, minutes]) => ({ title, minutes }))
-      .sort((a, b) => b.minutes - a.minutes)
+      .map(([title, watched]) => ({ title, watched }))
+      .sort((a, b) => b.watched - a.watched)
       .slice(0, 10);
 
     return { byDay, byTitle };
@@ -164,7 +120,7 @@ export default function Home() {
                     <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="minutes" />
+                    <Line type="monotone" dataKey="watched" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -179,7 +135,7 @@ export default function Home() {
                     <XAxis dataKey="title" tick={{ fontSize: 10 }} interval={0} angle={-30} height={60} />
                     <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip />
-                    <Bar dataKey="minutes" />
+                    <Bar dataKey="watched" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -188,7 +144,7 @@ export default function Home() {
         )}
 
         <footer className="text-xs opacity-70">
-          Tip: Get your CSV from Netflix → Account → Profile & Parental Controls → **Viewing activity** → **Download all**.
+          Tip: Get your CSV from Netflix → Account → Profiles → Your Profile → Viewing activity → Download all.
         </footer>
       </div>
     </main>
